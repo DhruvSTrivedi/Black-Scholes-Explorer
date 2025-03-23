@@ -4,18 +4,21 @@ from scipy.stats import norm
 import matplotlib.pyplot as plt
 import seaborn as sns
 import yfinance as yf
+import plotly.graph_objects as go
 from datetime import datetime, timedelta
+import warnings
+warnings.filterwarnings("ignore")
 
 # Page Configuration
 st.set_page_config(
     page_title="Black-Scholes Pro Terminal",
-    page_icon="📈",
+    page_icon="\ud83d\udcc8",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# 🎨 Custom CSS
-st.markdown("""
+# Custom CSS
+theme = """
 <style>
 .stApp {
     background-color: #0d1117;
@@ -52,44 +55,52 @@ h1, h2, h3, h4 {
     border: 1px solid #30363d;
 }
 </style>
-""", unsafe_allow_html=True)
+"""
+st.markdown(theme, unsafe_allow_html=True)
 
-# ⚙️ Black-Scholes + Delta
-def black_scholes(S, K, T, r, sigma, option_type="call"):
+# Black-Scholes with Greeks
+def black_scholes_with_greeks(S, K, T, r, sigma, option_type="call"):
     try:
         if T <= 0 or sigma <= 0:
-            return 0.0, 0.0
-        d1 = (np.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * np.sqrt(T))
+            return {"price": 0, "delta": 0, "gamma": 0, "vega": 0, "theta": 0, "rho": 0}
+        d1 = (np.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
         d2 = d1 - sigma * np.sqrt(T)
+        gamma = norm.pdf(d1) / (S * sigma * np.sqrt(T))
+        vega = S * norm.pdf(d1) * np.sqrt(T) / 100
         if option_type == "call":
             price = S * norm.cdf(d1) - K * np.exp(-r * T) * norm.cdf(d2)
             delta = norm.cdf(d1)
-        elif option_type == "put":
+            theta = (-S * norm.pdf(d1) * sigma / (2 * np.sqrt(T)) -
+                     r * K * np.exp(-r * T) * norm.cdf(d2)) / 365
+            rho = K * T * np.exp(-r * T) * norm.cdf(d2) / 100
+        else:
             price = K * np.exp(-r * T) * norm.cdf(-d2) - S * norm.cdf(-d1)
             delta = norm.cdf(d1) - 1
-        return price, delta
+            theta = (-S * norm.pdf(d1) * sigma / (2 * np.sqrt(T)) +
+                     r * K * np.exp(-r * T) * norm.cdf(-d2)) / 365
+            rho = -K * T * np.exp(-r * T) * norm.cdf(-d2) / 100
+        return {"price": price, "delta": delta, "gamma": gamma, "vega": vega, "theta": theta, "rho": rho}
     except:
-        return 0.0, 0.0
+        return {"price": 0, "delta": 0, "gamma": 0, "vega": 0, "theta": 0, "rho": 0}
 
-# 🎲 Monte Carlo Simulation
-def monte_carlo(S, K, T, r, sigma, option_type="call", simulations=10000):
-    np.random.seed(42)  # For reproducibility
-    dt = T
-    Z = np.random.standard_normal(simulations)
-    ST = S * np.exp((r - 0.5 * sigma ** 2) * dt + sigma * np.sqrt(dt) * Z)
+# Monte Carlo with Steps
+def monte_carlo_steps(S, K, T, r, sigma, option_type="call", simulations=10000, steps=100):
+    dt = T / steps
+    ST = S * np.exp(np.cumsum((r - 0.5 * sigma ** 2) * dt +
+                              sigma * np.sqrt(dt) * np.random.randn(simulations, steps), axis=1))[:, -1]
     if option_type == "call":
         payoffs = np.maximum(ST - K, 0)
     else:
         payoffs = np.maximum(K - ST, 0)
-    price = np.exp(-r * T) * np.mean(payoffs)
-    return price
+    return np.exp(-r * T) * np.mean(payoffs)
 
-# 📊 Heatmap Generator
+# Heatmap
+
 def generate_heatmap(S, K, T, r, sigma, spot_range, vol_range, option_type="call"):
     prices = np.zeros((len(vol_range), len(spot_range)))
     for i, vol in enumerate(vol_range):
         for j, spot in enumerate(spot_range):
-            prices[i, j], _ = black_scholes(spot, K, T, r, vol, option_type)
+            prices[i, j] = black_scholes_with_greeks(spot, K, T, r, vol, option_type)['price']
     fig, ax = plt.subplots(figsize=(8, 5), facecolor="none")
     sns.heatmap(
         prices,
@@ -112,25 +123,23 @@ def generate_heatmap(S, K, T, r, sigma, spot_range, vol_range, option_type="call
     plt.setp(cbar.ax.get_yticklabels(), color="#c9d1d9")
     return fig
 
-# 📡 Fetch Real-Time Data
+# Real-time data
+@st.cache_data
 def fetch_yahoo_data(ticker):
-    stock = yf.Ticker(ticker)
     try:
+        stock = yf.Ticker(ticker)
         hist = stock.history(period="1d")
-        S = hist["Close"].iloc[-1]
-        # Fetch implied volatility from options (approximation using last 30 days)
-        options = stock.option_chain(stock.options[0]) if stock.options else None
-        sigma = stock.history(period="30d")["Close"].pct_change().std() * np.sqrt(252) if not options else 0.2
-        return S, sigma
+        price = hist["Close"].iloc[-1]
+        sigma = stock.history(period="30d")["Close"].pct_change().std() * np.sqrt(252)
+        return price, sigma
     except:
         return None, None
 
-# 🧠 Sidebar
+# Sidebar UI
 with st.sidebar:
     st.markdown("<h3>Sharjeel Jafri</h3>", unsafe_allow_html=True)
     st.markdown("---")
-    
-    ticker = st.text_input("Ticker Symbol (e.g., AAPL)", "AAPL")
+    ticker = st.text_input("Ticker Symbol", "AAPL")
     if st.button("Fetch Real-Time Data"):
         S_live, sigma_live = fetch_yahoo_data(ticker)
         if S_live:
@@ -139,66 +148,86 @@ with st.sidebar:
         else:
             st.error("Failed to fetch data. Using defaults.")
 
-    st.subheader("📈 Parameters")
     S = st.number_input("Asset Price", 1.0, 1000.0, st.session_state.get("S", 100.0), 1.0)
     K = st.number_input("Strike Price", 1.0, 1000.0, 100.0, 1.0)
     T = st.number_input("Time (Years)", 0.01, 10.0, 1.0, 0.01)
-    sigma = st.number_input("Volatility (σ)", 0.01, 1.0, st.session_state.get("sigma", 0.2), 0.01)
+    sigma = st.number_input("Volatility (\u03c3)", 0.01, 1.0, st.session_state.get("sigma", 0.2), 0.01)
     r = st.number_input("Risk-Free Rate", 0.0, 1.0, 0.05, 0.01)
 
-    st.subheader("🎯 Heatmap Settings")
+    st.subheader("\ud83c\udfaf Heatmap Settings")
     spot_min = st.number_input("Min Spot", value=S * 0.8, step=1.0)
     spot_max = st.number_input("Max Spot", value=S * 1.2, step=1.0)
     vol_min = st.slider("Min Volatility", 0.01, 1.0, sigma * 0.5, 0.01)
     vol_max = st.slider("Max Volatility", 0.01, 1.0, sigma * 1.5, 0.01)
     grid_size = st.slider("Heatmap Grid Size", 5, 20, 10, 1)
 
-    st.subheader("🎲 Monte Carlo")
+    st.subheader("\ud83c\udfb2 Monte Carlo")
     sims = st.number_input("Simulations", 1000, 100000, 10000, 1000)
+    steps = st.slider("Time Steps", 10, 500, 100, 10)
 
-# 🧪 Main Interface with Tabs
-st.title("📈 Black-Scholes Pro Terminal")
-st.markdown("Real-time pricing, Greeks, and Monte Carlo simulations.")
+# Main Interface
+st.title("\ud83d\udcc8 Black-Scholes Pro Terminal")
+st.markdown("Real-time pricing, Greeks, Monte Carlo, and heatmaps.")
+tabs = st.tabs(["Black-Scholes", "Monte Carlo", "Candlestick Chart"])
 
-tabs = st.tabs(["Black-Scholes", "Monte Carlo"])
-
-# Tab 1: Black-Scholes
 with tabs[0]:
-    st.subheader("🔢 Current Inputs")
-    cols = st.columns(5)
-    metrics = [("Asset Price", S), ("Strike", K), ("Time", T), ("Volatility", sigma), ("Rate", r)]
-    for col, (label, value) in zip(cols, metrics):
+    st.subheader("Inputs")
+    for col, (label, value) in zip(st.columns(5), [("Asset Price", S), ("Strike", K), ("Time", T), ("Volatility", sigma), ("Rate", r)]):
         col.markdown(f"<div class='metric-box'><h4>{label}</h4><p>{value:.2f}</p></div>", unsafe_allow_html=True)
 
-    call_price, call_delta = black_scholes(S, K, T, r, sigma, "call")
-    put_price, put_delta = black_scholes(S, K, T, r, sigma, "put")
-    st.subheader("📊 Option Insights")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown(f"<div class='option-card'><h3>CALL</h3><h2>${call_price:.2f}</h2><p>Delta: {call_delta:.3f}</p></div>", unsafe_allow_html=True)
-    with col2:
-        st.markdown(f"<div class='option-card'><h3>PUT</h3><h2>${put_price:.2f}</h2><p>Delta: {put_delta:.3f}</p></div>", unsafe_allow_html=True)
+    call_data = black_scholes_with_greeks(S, K, T, r, sigma, "call")
+    put_data = black_scholes_with_greeks(S, K, T, r, sigma, "put")
 
-    st.subheader("📉 Price Heatmaps")
-    spot_range = np.linspace(spot_min, spot_max, grid_size)
-    vol_range = np.linspace(vol_min, vol_max, grid_size)
+    st.subheader("\ud83d\udcca Option Insights")
     col1, col2 = st.columns(2)
-    with col1:
-        st.pyplot(generate_heatmap(S, K, T, r, sigma, spot_range, vol_range, "call"))
-    with col2:
-        st.pyplot(generate_heatmap(S, K, T, r, sigma, spot_range, vol_range, "put"))
+    for data, label, col in zip([call_data, put_data], ["CALL", "PUT"], [col1, col2]):
+        col.markdown(f"""
+        <div class='option-card'>
+            <h3>{label}</h3>
+            <h2>${data['price']:.2f}</h2>
+            <p>Delta: {data['delta']:.3f}</p>
+            <p>Gamma: {data['gamma']:.4f}</p>
+            <p>Vega: {data['vega']:.4f}</p>
+            <p>Theta: {data['theta']:.4f}</p>
+            <p>Rho: {data['rho']:.4f}</p>
+        </div>
+        """, unsafe_allow_html=True)
 
-# Tab 2: Monte Carlo
+    if spot_min < spot_max and vol_min < vol_max:
+        st.subheader("\ud83d\udcc9 Heatmaps")
+        spot_range = np.linspace(spot_min, spot_max, grid_size)
+        vol_range = np.linspace(vol_min, vol_max, grid_size)
+        col1, col2 = st.columns(2)
+        col1.pyplot(generate_heatmap(S, K, T, r, sigma, spot_range, vol_range, "call"))
+        col2.pyplot(generate_heatmap(S, K, T, r, sigma, spot_range, vol_range, "put"))
+    else:
+        st.error("\u26a0\ufe0f Ensure Spot Min < Max and Volatility Min < Max.")
+
 with tabs[1]:
-    st.subheader("🎲 Monte Carlo Simulation")
-    st.markdown("Compare Black-Scholes with Monte Carlo pricing.")
-    call_mc = monte_carlo(S, K, T, r, sigma, "call", sims)
-    put_mc = monte_carlo(S, K, T, r, sigma, "put", sims)
-    
+    st.subheader("\ud83c\udfb2 Monte Carlo Simulation")
+    call_mc = monte_carlo_steps(S, K, T, r, sigma, "call", sims, steps)
+    put_mc = monte_carlo_steps(S, K, T, r, sigma, "put", sims, steps)
     col1, col2 = st.columns(2)
-    with col1:
-        st.markdown(f"<div class='option-card'><h3>CALL</h3><h2>${call_mc:.2f}</h2><p>Sims: {sims}</p></div>", unsafe_allow_html=True)
-    with col2:
-        st.markdown(f"<div class='option-card'><h3>PUT</h3><h2>${put_mc:.2f}</h2><p>Sims: {sims}</p></div>", unsafe_allow_html=True)
+    col1.markdown(f"<div class='option-card'><h3>CALL</h3><h2>${call_mc:.2f}</h2><p>Sims: {sims}</p></div>", unsafe_allow_html=True)
+    col2.markdown(f"<div class='option-card'><h3>PUT</h3><h2>${put_mc:.2f}</h2><p>Sims: {sims}</p></div>", unsafe_allow_html=True)
 
-    st.markdown(f"**Black-Scholes Comparison:** Call: ${call_price:.2f} | Put: ${put_price:.2f}")
+with tabs[2]:
+    st.subheader("\ud83d\udcca Live Candlestick Chart")
+    stock = yf.Ticker(ticker)
+    df = stock.history(period="7d", interval="1h")
+    fig = go.Figure(data=[
+        go.Candlestick(
+            x=df.index,
+            open=df["Open"],
+            high=df["High"],
+            low=df["Low"],
+            close=df["Close"])
+    ])
+    fig.update_layout(
+        xaxis_rangeslider_visible=False,
+        plot_bgcolor="#0d1117",
+        paper_bgcolor="#0d1117",
+        font=dict(color="#c9d1d9"),
+        title=f"{ticker} - Last 7 Days Candlestick"
+    )
+    st.plotly_chart(fig, use_container_width=True)
