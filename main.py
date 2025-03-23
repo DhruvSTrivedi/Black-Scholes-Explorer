@@ -12,10 +12,11 @@ warnings.filterwarnings("ignore")
 # Page Configuration
 st.set_page_config(
     page_title="Black-Scholes Pro Terminal",
-    page_icon="\ud83d\udcc8",
+    page_icon=":chart_with_upwards_trend:",
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
 
 # Custom CSS
 theme = """
