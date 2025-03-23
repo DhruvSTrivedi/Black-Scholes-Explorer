@@ -127,8 +127,7 @@ def fetch_yahoo_data(ticker):
 
 # 🧠 Sidebar
 with st.sidebar:
-    st.markdown("<h3>Enhanced by Grok</h3>", unsafe_allow_html=True)
-    st.markdown("[Powered by xAI](#)", unsafe_allow_html=True)
+    st.markdown("<h3>Sharjeel Jafri</h3>", unsafe_allow_html=True)
     st.markdown("---")
     
     ticker = st.text_input("Ticker Symbol (e.g., AAPL)", "AAPL")
