@@ -155,14 +155,14 @@ with st.sidebar:
     sigma = st.number_input("Volatility (\u03c3)", 0.01, 1.0, st.session_state.get("sigma", 0.2), 0.01)
     r = st.number_input("Risk-Free Rate", 0.0, 1.0, 0.05, 0.01)
 
-    st.subheader("\ud83c\udfaf Heatmap Settings")
+    st.subheader("Heatmap Settings")
     spot_min = st.number_input("Min Spot", value=S * 0.8, step=1.0)
     spot_max = st.number_input("Max Spot", value=S * 1.2, step=1.0)
     vol_min = st.slider("Min Volatility", 0.01, 1.0, sigma * 0.5, 0.01)
     vol_max = st.slider("Max Volatility", 0.01, 1.0, sigma * 1.5, 0.01)
     grid_size = st.slider("Heatmap Grid Size", 5, 20, 10, 1)
 
-    st.subheader("\ud83c\udfb2 Monte Carlo")
+    st.subheader("🎲 Monte Carlo")  # or st.subheader("Monte Carlo")
     sims = st.number_input("Simulations", 1000, 100000, 10000, 1000)
     steps = st.slider("Time Steps", 10, 500, 100, 10)
 
@@ -179,7 +179,7 @@ with tabs[0]:
     call_data = black_scholes_with_greeks(S, K, T, r, sigma, "call")
     put_data = black_scholes_with_greeks(S, K, T, r, sigma, "put")
 
-    st.subheader("\ud83d\udcca Option Insights")
+    st.subheader("Option Insights")
     col1, col2 = st.columns(2)
     for data, label, col in zip([call_data, put_data], ["CALL", "PUT"], [col1, col2]):
         col.markdown(f"""
@@ -195,7 +195,7 @@ with tabs[0]:
         """, unsafe_allow_html=True)
 
     if spot_min < spot_max and vol_min < vol_max:
-        st.subheader("\ud83d\udcc9 Heatmaps")
+        st.subheader("Heatmaps")
         spot_range = np.linspace(spot_min, spot_max, grid_size)
         vol_range = np.linspace(vol_min, vol_max, grid_size)
         col1, col2 = st.columns(2)
@@ -205,7 +205,7 @@ with tabs[0]:
         st.error("\u26a0\ufe0f Ensure Spot Min < Max and Volatility Min < Max.")
 
 with tabs[1]:
-    st.subheader("\ud83c\udfb2 Monte Carlo Simulation")
+    st.subheader("Monte Carlo Simulation")
     call_mc = monte_carlo_steps(S, K, T, r, sigma, "call", sims, steps)
     put_mc = monte_carlo_steps(S, K, T, r, sigma, "put", sims, steps)
     col1, col2 = st.columns(2)
@@ -213,7 +213,7 @@ with tabs[1]:
     col2.markdown(f"<div class='option-card'><h3>PUT</h3><h2>${put_mc:.2f}</h2><p>Sims: {sims}</p></div>", unsafe_allow_html=True)
 
 with tabs[2]:
-    st.subheader("\ud83d\udcca Live Candlestick Chart")
+    st.subheader("Live Candlestick Chart")
     stock = yf.Ticker(ticker)
     df = stock.history(period="7d", interval="1h")
     fig = go.Figure(data=[
