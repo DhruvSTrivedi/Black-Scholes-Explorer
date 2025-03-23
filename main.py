@@ -17,7 +17,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-
 # Custom CSS
 theme = """
 <style>
@@ -96,7 +95,6 @@ def monte_carlo_steps(S, K, T, r, sigma, option_type="call", simulations=10000, 
     return np.exp(-r * T) * np.mean(payoffs)
 
 # Heatmap
-
 def generate_heatmap(S, K, T, r, sigma, spot_range, vol_range, option_type="call"):
     prices = np.zeros((len(vol_range), len(spot_range)))
     for i, vol in enumerate(vol_range):
@@ -152,7 +150,7 @@ with st.sidebar:
     S = st.number_input("Asset Price", 1.0, 1000.0, st.session_state.get("S", 100.0), 1.0)
     K = st.number_input("Strike Price", 1.0, 1000.0, 100.0, 1.0)
     T = st.number_input("Time (Years)", 0.01, 10.0, 1.0, 0.01)
-    sigma = st.number_input("Volatility (\u03c3)", 0.01, 1.0, st.session_state.get("sigma", 0.2), 0.01)
+    sigma = st.number_input("Volatility (σ)", 0.01, 1.0, st.session_state.get("sigma", 0.2), 0.01)
     r = st.number_input("Risk-Free Rate", 0.0, 1.0, 0.05, 0.01)
 
     st.subheader("Heatmap Settings")
@@ -162,12 +160,12 @@ with st.sidebar:
     vol_max = st.slider("Max Volatility", 0.01, 1.0, sigma * 1.5, 0.01)
     grid_size = st.slider("Heatmap Grid Size", 5, 20, 10, 1)
 
-    st.subheader("🎲 Monte Carlo")  # or st.subheader("Monte Carlo")
+    st.subheader("Monte Carlo")
     sims = st.number_input("Simulations", 1000, 100000, 10000, 1000)
     steps = st.slider("Time Steps", 10, 500, 100, 10)
 
 # Main Interface
-st.title("\ud83d\udcc8 Black-Scholes Pro Terminal")
+st.title("Black-Scholes Pro Terminal")
 st.markdown("Real-time pricing, Greeks, Monte Carlo, and heatmaps.")
 tabs = st.tabs(["Black-Scholes", "Monte Carlo", "Candlestick Chart"])
 
@@ -202,7 +200,7 @@ with tabs[0]:
         col1.pyplot(generate_heatmap(S, K, T, r, sigma, spot_range, vol_range, "call"))
         col2.pyplot(generate_heatmap(S, K, T, r, sigma, spot_range, vol_range, "put"))
     else:
-        st.error("\u26a0\ufe0f Ensure Spot Min < Max and Volatility Min < Max.")
+        st.error("Ensure Spot Min < Max and Volatility Min < Max.")
 
 with tabs[1]:
     st.subheader("Monte Carlo Simulation")
